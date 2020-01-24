@@ -6,7 +6,7 @@ import Foundation
 extension {{ enum.name }}: Codable {
   private enum CodingKeys: String, CodingKey {
     case base
-    {% for case in enum.cases where case.hasAssociatedValue %}
+    {% for case in enum.cases|!annotated:"skip" where case.hasAssociatedValue %}
     case {{ case.name }}Params
     {% endfor %}
   }
