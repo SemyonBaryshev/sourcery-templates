@@ -1,0 +1,78 @@
+// sourcery:file:CodableEnum
+// swiftlint:disable all
+import Foundation
+{% for enum in types.enums where enum.implements.CodableEnum %}
+
+extension {{ enum.name }}: Codable {
+  private enum CodingKeys: String, CodingKey {
+    case base
+    {% for case in enum.cases where case.hasAssociatedValue %}
+    case {{ case.name }}Params
+    {% endfor %}
+  }
+
+  private enum Base: String, Codable {
+    {% for case in enum.cases %}
+    case {{ case.name }}
+    {% endfor %}
+  }
+  {% for case in enum.cases|!annotated:"skip" where case.hasAssociatedValue %}
+
+  private struct {{ case.name|upperFirstLetter }}Params: Codable {
+    {% for associatedValue in case.associatedValues %}
+    let {{ associatedValue.localName }}: {{ associatedValue.typeName.name }}
+    {% endfor%}
+  }
+  {% endfor %}
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let base = try container.decode(Base.self, forKey: .base)
+    switch base {
+    {% for case in enum.cases %}
+    case .{{ case.name }}:
+      {% if case.hasAssociatedValue %}
+      {% if case|annotated:"skip" %}
+      self = .{{ case.annotations.skip }}
+      {% else %}
+      let {{ case.name }}Params = try container.decode({{ case.name|upperFirstLetter }}Params.self, forKey: .{{ case.name }}Params)
+      self = .{{ case.name }}(
+        {% for associatedValue in case.associatedValues %}
+        {{ associatedValue.localName }}: {{ case.name }}Params.{{ associatedValue.localName }}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      )
+      {% endif %}
+      {% else %}
+      self = .{{ case.name }}
+      {% endif %}
+    {% endfor %}
+    }
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    switch self {
+    {% for case in enum.cases %}
+    {% if case|annotated:"skip" %}
+    case .{{ case.name }}:
+      try container.encode(Base.{{ case.name }}, forKey: .base)
+    {% else %}
+    case {% if case.hasAssociatedValue %}let {% endif %}.{{ case.name }}{% if case.hasAssociatedValue %}({% for associatedValue in case.associatedValues %}{{ associatedValue.localName }}{% if not forloop.last %}, {% endif %}{% endfor %}){% endif %}:
+      try container.encode(Base.{{ case.name }}, forKey: .base)
+      {% if case.hasAssociatedValue %}
+      try container.encode(
+        {{ case.name|upperFirstLetter }}Params(
+          {% for associatedValue in case.associatedValues %}
+          {{ associatedValue.localName }}: {{ associatedValue.localName }}{% if not forloop.last %},{% endif %}
+          {% endfor %}
+        ),
+        forKey: .{{ case.name }}Params
+      )
+      {% endif %}
+    {% endif %}
+    {% endfor %}
+    }
+  }
+}
+{% endfor %}
+// sourcery:end
